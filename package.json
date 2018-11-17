@@ -1,6 +1,6 @@
 {
   "name": "qape-reporter-gitlab",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "QApe will report all issues to Gitlab repository",
   "main": "index.js",
   "scripts": {
