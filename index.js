@@ -90,4 +90,4 @@ class GitlabReporter extends EventEmitter {
 	}
 }
 
-module.exports = { GitlabReporter };
+exports.default = GitlabReporter;
