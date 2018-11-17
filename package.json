@@ -1,0 +1,31 @@
+{
+  "name": "qape-reporter-gitlab",
+  "version": "0.0.0",
+  "description": "QApe will report all issues to Gitlab repository",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Filipoliko/qape-reporter-gitlab.git"
+  },
+  "keywords": [
+    "qape",
+    "reporter",
+    "gitlab",
+    "issue",
+    "automatic",
+    "testing",
+    "robot"
+  ],
+  "author": "Filip Satek <filip.satek@firma.seznam.cz>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Filipoliko/qape-reporter-gitlab/issues"
+  },
+  "dependencies": {
+    "lodash.isequal": "4.5.0",
+    "request": "2.88.0"
+  }
+}
