@@ -78,7 +78,7 @@ class GitlabReporter extends EventEmitter {
 	}
 
 	_getScenarioReadable(scenario) {
-		return scenario
+		return `- Go to ${scenario[0].beforeLocation}\n` + scenario
 			.map(step => (`- ${step.message}`))
 			.join('\n');
 	}
