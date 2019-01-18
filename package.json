@@ -29,6 +29,6 @@
     "request": "2.88.0"
   },
   "peerDependencies": {
-    "qape": "0.0.x"
+    "qape": "0.x"
   }
 }
