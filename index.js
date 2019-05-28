@@ -8,19 +8,90 @@ class GitlabReporter extends EventEmitter {
 
 		this._config = config;
 
+		this._reporterOptions = this._config.reporterOptions && this._config.reporterOptions.gitlab || {};
+
 		this._results = [];
+	}
 
-		this._reporterOptions = this._config.reporterOptions && this._config.reporterOptions.gitlab;
-
-		if (!this._reporterOptions ||
-			!this._reporterOptions.projectId ||
-			!this._reporterOptions.url ||
-			!this._reporterOptions.privateToken
-		) {
-			throw Error('There are missing reporter options for gitlab reporter. Please update your config according to documentation.');
-		}
+	async init() {
+		this._reporterOptions = await this._getParsedOptions(this._reporterOptions);
 
 		this.on('scenario:end', eventData => this._handleScenarioEnd(eventData));
+	}
+
+	async _getParsedOptions(options) {
+		if (!options ||
+			!options.projectId ||
+			!options.url ||
+			!options.privateToken
+		) {
+			throw Error('GitlabReporter: There are missing reporter options. Please update your config according to documentation.');
+		}
+
+		await this._testGitlabOptions();
+
+		if (options.assignees) {
+			options.assignees = await this._resolveAssignees(options);
+		}
+
+		return options;
+	}
+
+	_testGitlabOptions() {
+		return new Promise((resolve, reject) => {
+			let options = this._getProjectUrlOptions('/');
+
+			request(options, (error, response) => {
+				if (error || (response && (response.statusCode !== 200))) {
+					console.error(`GitlabReporter: Testing gitlab request for url ${options.url}. Check reporter options.`);
+					console.error(error || `Recieved wrong status code ${response.statusCode}.`);
+					reject();
+					return;
+				}
+
+				resolve();
+			});
+		});
+	}
+
+	async _resolveAssignees(options) {
+		let assignees = [];
+
+		if (Array.isArray(options.assignees)) {
+			for (let assignee of options.assignees) {
+				if (typeof assignee === 'string') {
+					assignee = (await this._getUserId(assignee));
+				}
+
+				assignees.push(assignee);
+			}
+		} else {
+			throw Error('GitlabReporter: Option assignees must be an array of usernames or user ids.')
+		}
+
+		return assignees;
+	}
+
+	async _getUserId(username) {
+		let user = await new Promise((resolve, reject) => {
+			request({
+				url: `${this._reporterOptions.url}/api/v4/users?username=${username}`,
+				headers: {
+					'PRIVATE-TOKEN': this._reporterOptions.privateToken
+				}
+			}, (error, response, body) => {
+				if (error || (response && (response.statusCode !== 200))) {
+					console.error(`Unable to load user with username ${username} from gitlab.`);
+					console.error(error || `Recieved wrong status code ${response.statusCode}.`);
+					reject();
+					return;
+				}
+
+				resolve(JSON.parse(body)[0]);
+			});
+		});
+
+		return user.id;
 	}
 
 	async _handleScenarioEnd(eventData) {
@@ -39,14 +110,18 @@ class GitlabReporter extends EventEmitter {
 		}
 	}
 
+	_getProjectUrlOptions(url) {
+		return {
+			url: `${this._reporterOptions.url}/api/v4/projects/${this._reporterOptions.projectId}${url}`,
+			headers: {
+				'PRIVATE-TOKEN': this._reporterOptions.privateToken
+			}
+		}
+	}
+
 	_getIssueWithSameError(errors) {
 		return new Promise(resolve => {
-			request({
-				url: `${this._reporterOptions.url}/api/v4/projects/${this._reporterOptions.projectId}/issues?state=opened&labels=QApe`,
-				headers: {
-					'PRIVATE-TOKEN': this._reporterOptions.privateToken
-				}
-			}, (error, response, body) => {
+			request(this._getProjectUrlOptions('/issues?state=opened&labels=QApe'), (error, response, body) => {
 				if (!body || error || (response && (response.statusCode !== 200))) {
 					console.error('Unable to get issues from gitlab, duplicate issue might be created.')
 					resolve();
@@ -54,10 +129,11 @@ class GitlabReporter extends EventEmitter {
 				}
 
 				let issues = JSON.parse(body);
+				let escapedErrors = errors.map(({ error }) => error.replace(/\n/g, '\\n'));
 
 				for (let issue of issues) {
-					for (let err of errors) {
-						if (issue.description && issue.description.includes(err.error)) {
+					for (let err of escapedErrors) {
+						if (issue.description && issue.description.includes(err)) {
 							resolve(issue.iid);
 							return;
 						}
@@ -74,20 +150,13 @@ class GitlabReporter extends EventEmitter {
 	}
 
 	_postGitlabIssue(scenario, errors, issueId) {
-		let url = issueId ?
-			`${this._reporterOptions.url}/api/v4/projects/${this._reporterOptions.projectId}/issues/${issueId}/notes`
-		:
-			`${this._reporterOptions.url}/api/v4/projects/${this._reporterOptions.projectId}/issues`;
+		let url = issueId ? `/issues/${issueId}/notes` : '/issues';
 
-		request.post({
+		request.post(Object.assign({}, this._getProjectUrlOptions(url), {
 			method: 'POST',
-			url,
-			headers: {
-				'PRIVATE-TOKEN': this._reporterOptions.privateToken
-			},
 			json: true,
 			body: this._getGitlabRequestBody(scenario, errors, issueId)
-		}, (error, response) => {
+		}), (error, response) => {
 			if (error) {
 				return console.error(error);
 			}
@@ -128,7 +197,8 @@ class GitlabReporter extends EventEmitter {
 				this._getScenarioReadable(scenario) +
 				'\n\nJSON:\n\n' +
 				this._getScenarioJSON(scenario, errors),
-			labels: 'QApe'
+			labels: 'QApe',
+			assignee_ids: this._reporterOptions.assignees
 		};
 	}
 
