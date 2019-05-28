@@ -103,10 +103,9 @@ class GitlabReporter extends EventEmitter {
 
 			this._results.push({ scenario, errors });
 
-			this._getIssueWithSameError(errors)
-				.then(issueId => {
-					this._postGitlabIssue(scenario, errors, issueId);
-				})
+			let issueId = await this._getIssueWithSameError(errors);
+			
+			await this._postGitlabIssue(scenario, errors, issueId);
 		}
 	}
 
@@ -129,11 +128,18 @@ class GitlabReporter extends EventEmitter {
 				}
 
 				let issues = JSON.parse(body);
-				let escapedErrors = errors.map(({ error }) => error.replace(/\n/g, '\\n'));
+				let escapedErrors = errors.map(
+					({ error }) => error
+						.replace(/\n/g, '\\n')
+						.replace(/[^\w\s]/gi, '')
+				);
 
 				for (let issue of issues) {
 					for (let err of escapedErrors) {
-						if (issue.description && issue.description.includes(err)) {
+						let escapedDescription = issue.description &&
+							issue.description.replace(/[^\w\s]/gi, '');
+
+						if (escapedDescription.includes(err)) {
 							resolve(issue.iid);
 							return;
 						}
